@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Nigeria Security Incidents Map 2010-2025</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0a0a0a; color: #e0e0e0; }
+        #container { height: 100vh; display: flex; flex-direction: column; }
+        #header { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); padding: 15px 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.5); }
+        h1 { font-size: 24px; font-weight: 600; color: #00ff88; margin-bottom: 5px; }
+        .subtitle { font-size: 13px; color: #888; }
+        #stats { display: flex; gap: 20px; margin-top: 10px; flex-wrap: wrap; }
+        .stat-box { background: rgba(255,255,255,0.05); padding: 8px 15px; border-radius: 8px; border-left: 3px solid #00ff88; }
+        .stat-label { font-size: 11px; color: #888; text-transform: uppercase; }
+        .stat-value { font-size: 20px; font-weight: bold; color: #fff; }
+        #map { flex: 1; position: relative; }
+        #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000; background: rgba(26,26,46,0.95); padding: 30px; border-radius: 12px; text-align: center; color: #00ff88; font-size: 18px; }
+        #controls { background: rgba(26,26,46,0.95); padding: 15px; display: flex; align-items: center; gap: 15px; flex-wrap: wrap; border-top: 1px solid rgba(255,255,255,0.1); }
+        #yearSlider { flex: 1; min-width: 200px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; outline: none; -webkit-appearance: none; }
+        #yearSlider::-webkit-slider-thumb { appearance: none; width: 18px; height: 18px; background: #00ff88; border-radius: 50%; cursor: pointer; box-shadow: 0 2px 5px rgba(0,255,136,0.5); }
+        #yearSlider::-moz-range-thumb { width: 18px; height: 18px; background: #00ff88; border-radius: 50%; cursor: pointer; border: none; }
+        #yearDisplay { font-size: 20px; font-weight: bold; color: #00ff88; min-width: 80px; text-align: center; }
+        button { background: #00ff88; color: #0a0a0a; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s; }
+        button:hover { background: #00cc6a; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,255,136,0.3); }
+        button:disabled { background: #333; cursor: not-allowed; transform: none; }
+        .legend { background: rgba(26,26,46,0.95); padding: 15px; border-radius: 8px; position: absolute; bottom: 80px; right: 20px; z-index: 1000; max-width: 250px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+        .legend-title { font-weight: bold; margin-bottom: 10px; color: #00ff88; }
+        .legend-item { display: flex; align-items: center; margin: 8px 0; font-size: 12px; }
+        .legend-color { width: 20px; height: 20px; border-radius: 50%; margin-right: 10px; border: 2px solid rgba(255,255,255,0.3); }
+        .leaflet-popup-content-wrapper { background: #1a1a2e; color: #e0e0e0; border-radius: 8px; }
+        .leaflet-popup-content { margin: 15px; font-size: 13px; line-height: 1.6; }
+        .leaflet-popup-tip { background: #1a1a2e; }
+        .popup-title { font-weight: bold; color: #00ff88; margin-bottom: 8px; font-size: 14px; }
+        .popup-detail { margin: 5px 0; }
+        .popup-deaths { color: #ff4444; font-weight: bold; }
+        @media (max-width: 768px) {
+            h1 { font-size: 18px; }
+            #stats { gap: 10px; }
+            .stat-box { padding: 6px 10px; }
+            .legend { bottom: 100px; right: 10px; max-width: 200px; font-size: 11px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="header">
+            <h1>📊 Nigeria Security Incidents: Data-Driven Analysis</h1>
+            <div class="subtitle">Documented attacks attributed to bandit groups (2010-2025) | Source: ACLED, HRW, Amnesty International, News Archives</div>
+            <div id="stats">
+                <div class="stat-box">
+                    <div class="stat-label">Total Incidents</div>
+                    <div class="stat-value" id="totalIncidents">--</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Total Deaths</div>
+                    <div class="stat-value" id="totalDeaths">--</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Total Abductions</div>
+                    <div class="stat-value" id="totalAbductions">--</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">States Affected</div>
+                    <div class="stat-value" id="statesAffected">--</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Current Year</div>
+                    <div class="stat-value" id="currentYearStat">2010</div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="map">
+            <div id="loading">Loading incident data...</div>
+        </div>
+        
+        <div class="legend">
+            <div class="legend-title">Attack Severity (Deaths)</div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #ffeb3b;"></div>
+                <span>1-10 deaths</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #ff9800;"></div>
+                <span>11-50 deaths</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #f44336;"></div>
+                <span>51-100 deaths</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #b71c1c;"></div>
+                <span>100+ deaths</span>
+            </div>
+        </div>
+        
+        <div id="controls">
+            <button id="playBtn">▶ Play Timeline</button>
+            <div id="yearDisplay">2010</div>
+            <input type="range" id="yearSlider" min="2010" max="2025" value="2010" step="1">
+            <button id="resetBtn">Reset</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <script>
+        let attackData = [];
+        let markers = [];
+        let isPlaying = false;
+        let playInterval;
+        let nigeriaBorder = null;
+
+        // Nigeria GeoJSON boundary (simplified)
+        const nigeriaGeoJSON = {
+            "type": "Feature",
+            "properties": {"name": "Nigeria"},
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [[
+                    [2.691702, 6.258817], [2.749063, 7.870734], [2.723793, 8.506845],
+                    [2.912308, 9.137608], [3.220352, 9.444152], [3.705438, 10.063210],
+                    [3.600311, 10.733309], [3.797112, 11.696700], [3.572216, 11.895589],
+                    [3.611200, 12.307285], [4.368343, 12.465543], [5.443058, 13.865924],
+                    [6.445426, 13.492768], [6.820442, 13.115091], [7.330747, 13.098038],
+                    [7.804671, 13.343527], [9.014933, 12.826659], [9.524928, 12.851102],
+                    [10.114814, 13.277252], [10.701032, 13.246918], [11.058788, 13.430422],
+                    [13.318701, 13.556356], [13.973880, 13.352498], [14.608542, 13.330427],
+                    [14.496484, 12.859396], [14.595781, 12.085360], [14.181336, 11.511665],
+                    [13.993817, 11.178402], [13.572949, 10.798566], [13.308676, 10.160362],
+                    [13.167599, 9.640626], [12.955468, 9.417772], [12.753672, 8.717763],
+                    [12.218872, 8.305824], [12.063946, 7.799808], [11.839309, 7.397042],
+                    [11.745774, 6.981383], [11.058788, 6.644427], [10.497375, 7.055358],
+                    [10.118277, 7.038572], [9.522706, 6.453482], [9.233163, 6.444491],
+                    [8.757533, 5.479666], [8.500288, 4.771983], [7.462108, 4.412108],
+                    [7.082596, 4.464689], [6.698073, 4.240594], [5.898173, 4.262453],
+                    [5.362805, 4.887971], [5.033574, 5.611802], [4.325607, 6.270651],
+                    [3.574180, 6.258645], [2.691702, 6.258817]
+                ]]
+            }
+        };
+
+        // Initialize map
+        const map = L.map('map').setView([9.5, 8.0], 6);
+        
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '©OpenStreetMap, ©CartoDB',
+            maxZoom: 19
+        }).addTo(map);
+
+        // Add Nigeria border
+        nigeriaBorder = L.geoJSON(nigeriaGeoJSON, {
+            style: {
+                color: '#00ff88',
+                weight: 3,
+                opacity: 0.6,
+                fillOpacity: 0,
+                dashArray: '5, 5'
+            }
+        }).addTo(map);
+
+        // Fit map to Nigeria bounds
+        map.fitBounds(nigeriaBorder.getBounds());
+
+        function getColor(deaths) {
+            if (deaths >= 100) return '#b71c1c';
+            if (deaths >= 51) return '#f44336';
+            if (deaths >= 11) return '#ff9800';
+            return '#ffeb3b';
+        }
+
+        function getRadius(deaths) {
+            return Math.sqrt(deaths) * 2 + 5;
+        }
+
+        function updateMap(year) {
+            // Clear existing markers
+            markers.forEach(m => map.removeLayer(m));
+            markers = [];
+
+            // Filter data for selected year
+            const yearData = attackData.filter(d => d.year <= year);
+            
+            // Add markers with staggered animation
+            yearData.forEach((attack, index) => {
+                setTimeout(() => {
+                    const circle = L.circleMarker([attack.lat, attack.lng], {
+                        radius: getRadius(attack.deaths),
+                        fillColor: getColor(attack.deaths),
+                        color: '#fff',
+                        weight: 2,
+                        opacity: 0.8,
+                        fillOpacity: 0.7
+                    }).addTo(map);
+
+                    let popupContent = `
+                        <div class="popup-title">${attack.location}</div>
+                        <div class="popup-detail"><strong>Date:</strong> ${attack.date}</div>
+                        <div class="popup-detail popup-deaths"><strong>Deaths:</strong> ${attack.deaths}</div>
+                    `;
+                    
+                    if (attack.abductions > 0) {
+                        popupContent += `<div class="popup-detail"><strong>Abductions:</strong> ${attack.abductions}</div>`;
+                    }
+                    
+                    if (attack.type) {
+                        popupContent += `<div class="popup-detail"><strong>Type:</strong> ${attack.type}</div>`;
+                    }
+                    
+                    if (attack.description) {
+                        popupContent += `<div class="popup-detail">${attack.description}</div>`;
+                    }
+
+                    circle.bindPopup(popupContent);
+                    markers.push(circle);
+                }, index * 30); // Stagger each marker by 30ms
+            });
+
+            // Update stats
+            const uniqueStates = [...new Set(yearData.map(d => d.location.split(',')[1]?.trim()))].filter(Boolean);
+            document.getElementById('totalIncidents').textContent = yearData.length;
+            document.getElementById('totalDeaths').textContent = yearData.reduce((sum, d) => sum + d.deaths, 0).toLocaleString();
+            document.getElementById('totalAbductions').textContent = yearData.reduce((sum, d) => sum + d.abductions, 0).toLocaleString();
+            document.getElementById('statesAffected').textContent = uniqueStates.length;
+            document.getElementById('currentYearStat').textContent = year;
+        }
+
+        // Fetch data from GitHub Gist
+        async function loadData() {
+            try {
+                const response = await fetch('https://gist.githubusercontent.com/LogicAndNumbers/d6bbfdb8f13ee0add69e49a9526e24f2/raw/');
+                const text = await response.text();
+                
+                // Parse CSV
+                const lines = text.split('\n');
+                const dataStartIndex = lines.findIndex(line => line.startsWith('Year,Date,Location'));
+                
+                if (dataStartIndex === -1) {
+                    throw new Error('Could not find data header');
+                }
+                
+                // Parse CSV data
+                for (let i = dataStartIndex + 1; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (!line) continue;
+                    
+                    const parts = line.split(',');
+                    if (parts.length < 11) continue;
+                    
+                    const year = parseInt(parts[0]);
+                    const date = parts[1];
+                    const location = parts[2];
+                    const state = parts[3];
+                    const lat = parseFloat(parts[5]);
+                    const lng = parseFloat(parts[6]);
+                    const deaths = parseInt(parts[7]) || 0;
+                    const abductions = parseInt(parts[8]) || 0;
+                    const type = parts[9];
+                    const description = parts[10];
+                    
+                    if (year && lat && lng && !isNaN(lat) && !isNaN(lng)) {
+                        attackData.push({
+                            year,
+                            date,
+                            location: `${location}, ${state}`,
+                            lat,
+                            lng,
+                            deaths,
+                            abductions,
+                            type,
+                            description
+                        });
+                    }
+                }
+                
+                console.log(`Loaded ${attackData.length} incidents`);
+                
+                // Update slider range
+                const years = attackData.map(d => d.year);
+                const minYear = Math.min(...years);
+                const maxYear = Math.max(...years);
+                slider.min = minYear;
+                slider.max = maxYear;
+                slider.value = minYear;
+                yearDisplay.textContent = minYear;
+                
+                // Hide loading indicator
+                document.getElementById('loading').style.display = 'none';
+                
+                // Initialize map with data
+                updateMap(minYear);
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('loading').textContent = 'Error loading data. Please refresh.';
+            }
+        }
+
+        // Controls
+        const slider = document.getElementById('yearSlider');
+        const yearDisplay = document.getElementById('yearDisplay');
+        const playBtn = document.getElementById('playBtn');
+        const resetBtn = document.getElementById('resetBtn');
+
+        slider.addEventListener('input', (e) => {
+            const year = parseInt(e.target.value);
+            yearDisplay.textContent = year;
+            updateMap(year);
+        });
+
+        playBtn.addEventListener('click', () => {
+            if (isPlaying) {
+                clearInterval(playInterval);
+                playBtn.textContent = '▶ Play Timeline';
+                isPlaying = false;
+            } else {
+                playBtn.textContent = '⏸ Pause';
+                isPlaying = true;
+                playInterval = setInterval(() => {
+                    let currentYear = parseInt(slider.value);
+                    if (currentYear >= parseInt(slider.max)) {
+                        clearInterval(playInterval);
+                        playBtn.textContent = '▶ Play Timeline';
+                        isPlaying = false;
+                        return;
+                    }
+                    currentYear++;
+                    slider.value = currentYear;
+                    yearDisplay.textContent = currentYear;
+                    updateMap(currentYear);
+                }, 2500); // 2.5 seconds per year for impact
+            }
+        });
+
+        resetBtn.addEventListener('click', () => {
+            slider.value = slider.min;
+            yearDisplay.textContent = slider.min;
+            updateMap(parseInt(slider.min));
+            if (isPlaying) {
+                clearInterval(playInterval);
+                playBtn.textContent = '▶ Play Timeline';
+                isPlaying = false;
+            }
+        });
+
+        // Load data on page load
+        loadData();
+    </script>
+</body>
+</html>
