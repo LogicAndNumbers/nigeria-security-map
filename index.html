@@ -230,7 +230,7 @@
         // Fetch data from GitHub Gist
         async function loadData() {
             try {
-                const response = await fetch('https://gist.github.com/LogicAndNumbers/d6bbfdb8f13ee0add69e49a9526e24f2#file-nigeria_security_incidents_2010-2025-csv');
+                const response = await fetch('https://gist.githubusercontent.com/LogicAndNumbers/d6bbfdb8f13ee0add69e49a9526e24f2/raw/nigeria_security_incidents_2010-2025.csv');
                 const text = await response.text();
                 
                 // Parse CSV
